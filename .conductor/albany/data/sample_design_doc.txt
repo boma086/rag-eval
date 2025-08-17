@@ -1,0 +1,35 @@
+# Sample Historical Design Document
+
+## Project: Japanese Language Learning App (Version 1.0)
+
+### Overview
+This document describes the basic design of our first Japanese language learning application. The app focuses on providing interactive lessons, vocabulary building, and progress tracking for learners of all levels.
+
+### Authentication System
+For user authentication, we implemented OAuth 2.0 with JWT tokens to ensure secure access to user accounts. Passwords are hashed using bcrypt before storage in the database. We also integrated multi-factor authentication (MFA) via email verification codes for enhanced security.
+
+### Database Design
+We used a PostgreSQL database with the following key tables:
+1. Users: Stores user account information
+2. Lessons: Contains lesson content and metadata
+3. Vocabulary: Dictionary of Japanese words with translations
+4. Progress: Tracks user progress through lessons
+
+### API Structure
+Our RESTful API is organized into these main endpoints:
+- /auth: Authentication endpoints
+- /lessons: Lesson content and retrieval
+- /vocabulary: Vocabulary search and management
+- /progress: User progress tracking
+
+### Security Considerations
+- All API communications use HTTPS
+- Input validation is performed on all user-submitted data
+- Regular security audits are conducted
+- User sessions expire after 30 minutes of inactivity
+
+### Lessons Learned
+1. Implementing MFA significantly improved user account security
+2. PostgreSQL performed well under load but required careful indexing
+3. Users appreciated the ability to track their learning progress
+4. Vocabulary search performance was improved by implementing full-text search

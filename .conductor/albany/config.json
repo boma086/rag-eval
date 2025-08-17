@@ -1,0 +1,22 @@
+{
+  "project_name": "RAG Evaluation Framework for Japanese Software Development",
+  "version": "1.0.0",
+  "description": "A comprehensive framework for evaluating RAG systems in the context of Japanese software development",
+  "configuration": {
+    "evaluator": {
+      "provider": "openrouter",
+      "model": "gpt-3.5-turbo",
+      "base_url": "https://openrouter.ai/api/v1"
+    },
+    "rag_systems": {
+      "ragflow": {
+        "enabled": true,
+        "base_url": "your_ragflow_endpoint"
+      },
+      "dify": {
+        "enabled": true,
+        "base_url": "your_dify_endpoint"
+      }
+    }
+  }
+}

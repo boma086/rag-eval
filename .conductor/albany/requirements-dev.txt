@@ -1,0 +1,37 @@
+# Requirements for RAG Evaluation Framework
+
+# Core dependencies
+ragas
+langchain
+langchain_openai
+langchain_community
+python-dotenv
+pandas
+numpy
+
+# Document processing
+openpyxl  # For Excel file processing
+python-docx  # For Word document processing
+PyPDF2  # For PDF processing
+pdfplumber  # Alternative PDF processing library
+pillow  # For image processing
+pytesseract  # For OCR
+
+# Web interface
+streamlit  # For manual evaluation interface
+
+# Data visualization
+matplotlib  # For result visualization
+seaborn  # For statistical data visualization
+
+# Reporting
+reportlab  # For PDF report generation
+
+# Continuous evaluation
+apscheduler  # For scheduling evaluations
+
+# Development dependencies
+pytest  # For testing
+pytest-cov  # For test coverage
+black  # Code formatting
+flake8  # Code linting
