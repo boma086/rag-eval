@@ -48,32 +48,20 @@ ollama pull nomic-embed-text:latest
 # 运行完整评价
 python3 main_multi_eval_async.py
 
-## 🧪 **测试验证**
-
-运行系统测试：
-```bash
-python3 test_system.py
-```
-
 # 查看结果
-# 结果保存在 results/multi_evaluation_results.csv
+# 结果保存在 results/detailed_evaluation_results.json
 ```
 
 ## 🧠 **评价器架构**
 
 ### 📊 **当前可用评价器**
 
-#### 1. **学术评价器** (AcademicEvaluator)
-- **模型**: 单一聊天模型 (OpenRouter API)
-- **指标**: 相关性、正确性、完整性、清晰度
-- **特点**: 简单高效，适合快速评估
-
-#### 2. **混合异步评价器** (HybridAsyncEvaluator) 
+#### 1. **混合评价器** (HybridAsyncEvaluator) 
 - **模型**: 嵌入模型 + 聊天模型
 - **指标**: 嵌入模型计算语义相似度，聊天模型评估质量维度
 - **特点**: 理论更科学，但配置复杂
 
-#### 3. **Ragas评价器** (RagasOllamaEvaluator) 
+#### 2. **Ragas评价器** (RagasOllamaEvaluator) 
 - **状态**: 🚧 **临时禁用** - 兼容性问题待解决
 - **模型**: Ragas框架 + OpenRouter + Ollama
 - **指标**: faithfulness, answer_relevancy, context_recall等
@@ -158,7 +146,7 @@ python3 main_multi_eval_async.py
 ```
 
 ### **4. 查看结果**
-结果会保存在 `results/multi_evaluation_results.csv` 中，包含：
+结果会保存在 `results/detailed_evaluation_results.json 中，包含：
 - 原始问题
 - 标准答案  
 - 各RAG系统的回答
