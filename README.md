@@ -46,7 +46,7 @@ ollama pull nomic-embed-text:latest
 ### 4. 运行评价
 ```bash
 # 运行完整评价
-python3 main_multi_eval.py
+python3 main_multi_eval_async.py
 
 ## 🧪 **测试验证**
 
@@ -105,7 +105,7 @@ python3 test_system.py
 ## 📁 **项目结构**
 ```
 rag-eval/
-├── main_multi_eval.py          # 主程序入口
+├── main_multi_eval_async.py     # 主程序入口
 ├── config.py                   # 配置管理
 ├── connectors/                 # RAG连接器（策略模式）
 │   ├── base.py                # 基础连接器接口
@@ -154,7 +154,7 @@ rag-eval/
 ### **3. 运行评价**
 添加新问题后，重新运行评价：
 ```bash
-python3 main_multi_eval.py
+python3 main_multi_eval_async.py
 ```
 
 ### **4. 查看结果**
