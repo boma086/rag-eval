@@ -174,7 +174,4 @@ python3 main_multi_eval.py
 
 本项目采用MIT许可证。
 
-## 🙏 **致谢**
 
-- [Ollama](https://ollama.ai/) - 本地LLM服务
-- [OpenRouter](https://openrouter.ai/) - LLM API服务
