@@ -2,24 +2,19 @@
 
 from typing import Dict, List, Any, Optional
 from .base import BaseEvaluator
-from .ragas_ollama import RagasOllamaEvaluator
-from .ragas_alternative import RagasAlternativeEvaluator
-from .simple_evaluator import SimpleEvaluator
-from .academic_evaluator import AcademicEvaluator
+# from .ragas_ollama import RagasOllamaEvaluator  # Temporarily disabled due to compatibility issues
 
 class EvaluatorFactory:
     """評価器ファクトリークラス - 評価器の生成と管理を統一"""
     
     # 利用可能な評価器タイプ
     EVALUATOR_TYPES = {
-        "ragas": RagasOllamaEvaluator,
-        "ragas_alt": RagasAlternativeEvaluator,
-        "simple": SimpleEvaluator,
-        "academic": AcademicEvaluator
+        # "ragas": RagasOllamaEvaluator,  # Temporarily disabled due to compatibility issues
+        # "academic": AcademicEvaluator  # Removed in favor of async version
     }
     
     # デフォルト評価器の優先順位
-    DEFAULT_PRIORITY = ["ragas", "ragas_alt", "simple", "academic"]
+    DEFAULT_PRIORITY = []  # Synchronous evaluators removed, use async version instead
     
     @classmethod
     def create_evaluator(cls, evaluator_type: str, config: Dict[str, Any]) -> Optional[BaseEvaluator]:
@@ -89,20 +84,20 @@ class EvaluatorFactory:
     def _get_evaluator_description(cls, evaluator_type: str) -> str:
         """評価器の説明を取得"""
         descriptions = {
-            "ragas": "Ragas框架 - OpenRouter Chat + Ollama Embeddings",
-            "ragas_alt": "Ragas代替 - LLM直接評価でRagas基準を模倣",
-            "simple": "シンプル評価器 - 基本的な関連性・正確性評価",
-            "academic": "学術的評価器 - 4次元専門評価"
+            # "ragas": "Ragas框架 - OpenRouter Chat + Ollama Embeddings",  # Temporarily disabled
+            # "academic": "学術的評価器 - 4次元専門評価（関連性、正確性、完整性、清晰度）"  # Removed in favor of async version
         }
         return descriptions.get(evaluator_type, "説明なし")
 
 class EvaluatorManager:
     """評価器マネージャー - Strategy Pattern実装"""
     
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, chat_config: Dict[str, Any], embedding_config: Dict[str, Any]):
         """評価器マネージャーを初期化"""
-        self.config = config
-        self.evaluators = EvaluatorFactory.create_all_evaluators(config)
+        # 合并聊天和嵌入配置
+        combined_config = {**chat_config, **embedding_config}
+        self.config = combined_config
+        self.evaluators = EvaluatorFactory.create_all_evaluators(combined_config)
         
         if not self.evaluators:
             raise ValueError("利用可能な評価器がありません")

@@ -142,10 +142,11 @@ cython_debug/
 # 结果文件
 results/*.csv
 results/*.json
+results/test
 
 # 调试文件
 debug_*.py
-test_*.py
+#test_*.py
 
 # 系统文件
 .DS_Store
@@ -170,3 +171,6 @@ logs/
 # 备份文件
 *.bak
 *.backup
+
+# ide
+。claude
