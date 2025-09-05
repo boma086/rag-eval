@@ -95,50 +95,52 @@ class RagasOllamaEvaluator(BaseEvaluator):
             relevancy_scores = [None] * len(answers)
             correctness_scores = [None] * len(answers)
 
-            # Ragasの結果は辞書形式で、各メトリクスは単一値またはリスト
+            # Ragas 0.3.2+ の結果はEvaluationResultオブジェクト
             import math
+            
+            try:
+                # scoresプロパティからスコアを取得
+                scores_dict = result.scores
+                
+                # Answer Relevancy処理
+                if 'answer_relevancy' in scores_dict:
+                    rel_result = scores_dict['answer_relevancy']
+                    if rel_result is not None:
+                        if isinstance(rel_result, (list, tuple)):
+                            # リストの場合
+                            for i, idx in enumerate(valid_indices):
+                                if i < len(rel_result):
+                                    score = rel_result[i]
+                                    relevancy_scores[idx] = score if score is not None and not math.isnan(score) else None
+                        else:
+                            # 単一値の場合
+                            score = rel_result
+                            if not math.isnan(score):
+                                # 全ての有効インデックスに同じスコアを適用
+                                for idx in valid_indices:
+                                    relevancy_scores[idx] = score
 
-            # Answer Relevancy処理
-            rel_result = result.get('answer_relevancy')
-            if rel_result is not None:
-                try:
-                    if isinstance(rel_result, (list, tuple)):
-                        # リストの場合
-                        for i, idx in enumerate(valid_indices):
-                            if i < len(rel_result):
-                                score = rel_result[i]
-                                relevancy_scores[idx] = score if score is not None and not math.isnan(score) else None
-                    else:
-                        # 単一値の場合
-                        score = rel_result
-                        if not math.isnan(score):
-                            # 全ての有効インデックスに同じスコアを適用
-                            for idx in valid_indices:
-                                relevancy_scores[idx] = score
-                except Exception as e:
-                    print(f"    Relevancy処理エラー: {e}")
-                    # エラーの場合、全てNoneのまま
-
-            # Answer Correctness処理
-            cor_result = result.get('answer_correctness')
-            if cor_result is not None:
-                try:
-                    if isinstance(cor_result, (list, tuple)):
-                        # リストの場合
-                        for i, idx in enumerate(valid_indices):
-                            if i < len(cor_result):
-                                score = cor_result[i]
-                                correctness_scores[idx] = score if score is not None and not math.isnan(score) else None
-                    else:
-                        # 単一値の場合
-                        score = cor_result
-                        if not math.isnan(score):
-                            # 全ての有効インデックスに同じスコアを適用
-                            for idx in valid_indices:
-                                correctness_scores[idx] = score
-                except Exception as e:
-                    print(f"    Correctness処理エラー: {e}")
-                    # エラーの場合、全てNoneのまま
+                # Answer Correctness処理
+                if 'answer_correctness' in scores_dict:
+                    cor_result = scores_dict['answer_correctness']
+                    if cor_result is not None:
+                        if isinstance(cor_result, (list, tuple)):
+                            # リストの場合
+                            for i, idx in enumerate(valid_indices):
+                                if i < len(cor_result):
+                                    score = cor_result[i]
+                                    correctness_scores[idx] = score if score is not None and not math.isnan(score) else None
+                        else:
+                            # 単一値の場合
+                            score = cor_result
+                            if not math.isnan(score):
+                                # 全ての有効インデックスに同じスコアを適用
+                                for idx in valid_indices:
+                                    correctness_scores[idx] = score
+                                    
+            except Exception as e:
+                print(f"    スコア処理エラー: {e}")
+                # エラーの場合、全てNoneのまま
             
             return {
                 "relevancy": relevancy_scores,

@@ -217,47 +217,75 @@ class AsyncAcademicEvaluator(AsyncBaseEvaluator):
     async def _calculate_semantic_similarity(self, answer: str, ground_truth: str) -> float:
         """使用嵌入模型计算语义相似度（混合模式用）"""
         
-        embedding_prompt = f"""
-请计算以下两个文本的语义相似度：
-
-回答: {answer}
-标准答案: {ground_truth}
-
-请返回一个0.0到1.0之间的相似度分数，其中1.0表示语义完全相同，0.0表示完全无关。
-只返回数字分数，不要其他解释。
-"""
-        
         try:
+            # 并发获取两个文本的嵌入向量
             async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session:
                 headers = {
                     "Authorization": f"Bearer {self.embedding_config['api_key']}",
                     "Content-Type": "application/json"
                 }
                 
-                payload = {
+                # 获取回答的嵌入向量
+                answer_payload = {
                     "model": self.embedding_config["model"],
-                    "prompt": embedding_prompt
+                    "prompt": answer
                 }
                 
-                async with session.post(
-                    f"{self.embedding_config['base_url'].rstrip('/')}/api/generate",
+                # 获取标准答案的嵌入向量
+                ground_truth_payload = {
+                    "model": self.embedding_config["model"],
+                    "prompt": ground_truth
+                }
+                
+                # 并发请求两个嵌入向量
+                answer_task = session.post(
+                    f"{self.embedding_config['base_url'].rstrip('/')}/api/embeddings",
                     headers=headers,
-                    json=payload
-                ) as response:
-                    if response.status == 200:
-                        result = await response.json()
-                        response_text = result.get("response", "")
-                        numbers = re.findall(r'0?\.\d+|\d+\.\d+', response_text)
-                        if numbers:
-                            similarity = max(0.0, min(1.0, float(numbers[0])))
-                        else:
-                            similarity = self._calculate_text_similarity(answer, ground_truth)
-                        
-                        print(f"🔍 语义相似度: {similarity}")
-                        return similarity
-                    else:
-                        print(f"❌ 嵌入模型请求失败: {response.status}")
-                        return self._calculate_text_similarity(answer, ground_truth)
+                    json=answer_payload
+                )
+                
+                ground_truth_task = session.post(
+                    f"{self.embedding_config['base_url'].rstrip('/')}/api/embeddings",
+                    headers=headers,
+                    json=ground_truth_payload
+                )
+                
+                answer_response, ground_truth_response = await asyncio.gather(
+                    answer_task, ground_truth_task, return_exceptions=True
+                )
+                
+                # 处理回答嵌入向量
+                if isinstance(answer_response, Exception):
+                    print(f"❌ 回答嵌入向量获取失败: {answer_response}")
+                    return self._calculate_text_similarity(answer, ground_truth)
+                
+                if answer_response.status != 200:
+                    print(f"❌ 回答嵌入向量请求失败: {answer_response.status}")
+                    return self._calculate_text_similarity(answer, ground_truth)
+                
+                answer_result = await answer_response.json()
+                answer_embedding = answer_result.get("embedding", [])
+                
+                # 处理标准答案嵌入向量
+                if isinstance(ground_truth_response, Exception):
+                    print(f"❌ 标准答案嵌入向量获取失败: {ground_truth_response}")
+                    return self._calculate_text_similarity(answer, ground_truth)
+                
+                if ground_truth_response.status != 200:
+                    print(f"❌ 标准答案嵌入向量请求失败: {ground_truth_response.status}")
+                    return self._calculate_text_similarity(answer, ground_truth)
+                
+                ground_truth_result = await ground_truth_response.json()
+                ground_truth_embedding = ground_truth_result.get("embedding", [])
+                
+                # 计算余弦相似度
+                if len(answer_embedding) > 0 and len(ground_truth_embedding) > 0:
+                    similarity = self._calculate_cosine_similarity(answer_embedding, ground_truth_embedding)
+                    print(f"🔍 嵌入向量语义相似度: {similarity}")
+                    return similarity
+                else:
+                    print(f"❌ 嵌入向量为空")
+                    return self._calculate_text_similarity(answer, ground_truth)
                         
         except Exception as e:
             print(f"嵌入模型调用失败: {e}")
@@ -417,6 +445,60 @@ class AsyncAcademicEvaluator(AsyncBaseEvaluator):
             "relevancy": 0.0, "correctness": 0.0, "completeness": 0.0, 
             "clarity": 0.0, "coherence": 0.0, "helpfulness": 0.0
         }
+    
+    def _calculate_cosine_similarity(self, vec1: List[float], vec2: List[float]) -> float:
+        """计算余弦相似度"""
+        try:
+            import math
+            
+            if len(vec1) != len(vec2):
+                print(f"❌ 向量维度不匹配: {len(vec1)} vs {len(vec2)}")
+                return 0.0
+            
+            # 计算点积
+            dot_product = sum(a * b for a, b in zip(vec1, vec2))
+            
+            # 计算向量长度
+            magnitude1 = math.sqrt(sum(a * a for a in vec1))
+            magnitude2 = math.sqrt(sum(b * b for b in vec2))
+            
+            if magnitude1 == 0 or magnitude2 == 0:
+                return 0.0
+            
+            # 计算余弦相似度
+            cosine_similarity = dot_product / (magnitude1 * magnitude2)
+            
+            # 确保结果在[0, 1]范围内
+            return max(0.0, min(1.0, cosine_similarity))
+            
+        except Exception as e:
+            print(f"余弦相似度计算失败: {e}")
+            return 0.0
+    
+    def _calculate_text_similarity(self, text1: str, text2: str) -> float:
+        """计算文本相似度（备选方法，当embedding不可用时使用）"""
+        try:
+            # 简单的词汇重叠相似度计算
+            import re
+            from collections import Counter
+            
+            # 分词
+            words1 = set(re.findall(r'\b\w+\b', text1.lower()))
+            words2 = set(re.findall(r'\b\w+\b', text2.lower()))
+            
+            if not words1 or not words2:
+                return 0.0
+            
+            # 计算Jaccard相似度
+            intersection = words1.intersection(words2)
+            union = words1.union(words2)
+            
+            similarity = len(intersection) / len(union) if union else 0.0
+            return similarity
+            
+        except Exception as e:
+            print(f"文本相似度计算失败: {e}")
+            return 0.0
     
     def _get_default_quality_scores(self) -> Dict[str, float]:
         """获取默认质量评分"""

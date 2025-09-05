@@ -2,19 +2,19 @@
 
 from typing import Dict, List, Any, Optional
 from .base import BaseEvaluator
-# from .ragas_ollama import RagasOllamaEvaluator  # Temporarily disabled due to compatibility issues
+from .ragas_ollama import RagasOllamaEvaluator  # Re-enabled with compatible versions
 
 class EvaluatorFactory:
     """評価器ファクトリークラス - 評価器の生成と管理を統一"""
     
     # 利用可能な評価器タイプ
     EVALUATOR_TYPES = {
-        # "ragas": RagasOllamaEvaluator,  # Temporarily disabled due to compatibility issues
+        "ragas": RagasOllamaEvaluator,  # Re-enabled with compatible versions
         # "academic": AcademicEvaluator  # Removed in favor of async version
     }
     
     # デフォルト評価器の優先順位
-    DEFAULT_PRIORITY = []  # Synchronous evaluators removed, use async version instead
+    DEFAULT_PRIORITY = ["ragas"]  # Re-enabled Ragas evaluator
     
     @classmethod
     def create_evaluator(cls, evaluator_type: str, config: Dict[str, Any]) -> Optional[BaseEvaluator]:
@@ -84,7 +84,7 @@ class EvaluatorFactory:
     def _get_evaluator_description(cls, evaluator_type: str) -> str:
         """評価器の説明を取得"""
         descriptions = {
-            # "ragas": "Ragas框架 - OpenRouter Chat + Ollama Embeddings",  # Temporarily disabled
+            "ragas": "Ragas框架 - OpenRouter Chat + Ollama Embeddings",  # Re-enabled with compatible versions
             # "academic": "学術的評価器 - 4次元専門評価（関連性、正確性、完整性、清晰度）"  # Removed in favor of async version
         }
         return descriptions.get(evaluator_type, "説明なし")

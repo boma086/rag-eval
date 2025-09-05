@@ -3,6 +3,7 @@
 from typing import Dict, List, Any, Optional
 from .async_base import AsyncBaseEvaluator
 from .async_academic_evaluator import AsyncAcademicEvaluator
+from .async_ragas_evaluator import AsyncRagasEvaluator
 import asyncio
 import logging
 
@@ -13,11 +14,12 @@ class AsyncEvaluatorFactory:
     
     # 可用的异步评估器类型
     EVALUATOR_TYPES = {
-        "async_academic": AsyncAcademicEvaluator
+        "async_academic": AsyncAcademicEvaluator,
+        "async_ragas": AsyncRagasEvaluator
     }
     
     # 默认评估器优先级
-    DEFAULT_PRIORITY = ["async_academic"]
+    DEFAULT_PRIORITY = ["async_ragas", "async_academic"]
     
     @classmethod
     async def create_evaluator_async(cls, evaluator_type: str, config: Dict[str, Any]) -> Optional[AsyncBaseEvaluator]:
@@ -97,7 +99,8 @@ class AsyncEvaluatorFactory:
     def _get_evaluator_description(cls, evaluator_type: str) -> str:
         """获取评估器描述"""
         descriptions = {
-            "async_academic": "增强异步学术评估器 - 支持6维度质量评估（相关性、正确性、完整性、清晰度、连贯性、有用性）"
+            "async_academic": "增强异步学术评估器 - 支持6维度质量评估（相关性、正确性、完整性、清晰度、连贯性、有用性）",
+            "async_ragas": "异步Ragas框架评估器 - 完整的RAG评估指标集（相关性、正确性、忠实性、上下文精度、上下文召回率）"
         }
         return descriptions.get(evaluator_type, "无描述")
 
@@ -124,7 +127,7 @@ class AsyncEvaluatorManager:
             "embedding_api_key": self.embedding_config.get("api_key"),
             "embedding_base_url": self.embedding_config.get("base_url"),
             "embedding_model": self.embedding_config.get("model"),
-            "evaluation_mode": "pure_chat"  # 默认使用纯聊天模式，可配置为"hybrid"
+            "evaluation_mode": "hybrid"  # 使用混合模式：embedding计算相关性，聊天模型评估质量
         }
         
         self.evaluators = await AsyncEvaluatorFactory.create_all_evaluators_async(enhanced_config)
