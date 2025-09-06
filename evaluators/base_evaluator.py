@@ -1,4 +1,4 @@
-# 异步评价器基类 - 为评价系统提供异步接口
+# 评价器基类 - 为评价系统提供异步接口
 
 from abc import ABC, abstractmethod
 from typing import Dict, List, Any, Optional
@@ -7,12 +7,12 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-class AsyncBaseEvaluator(ABC):
-    """异步评价器基类"""
+class BaseEvaluator(ABC):
+    """评价器基类 - 支持异步API"""
     
     def __init__(self, name: str, config: Dict[str, Any]):
         """
-        初始化异步评价器
+        初始化评价器
         
         Args:
             name: 评价器名称
@@ -23,7 +23,7 @@ class AsyncBaseEvaluator(ABC):
         self.timeout = config.get('timeout', 45)
         self._available = False
         
-        logger.info(f"Async evaluator initialized: {name}")
+        logger.info(f"Evaluator initialized: {name}")
     
     @abstractmethod
     async def evaluate_answers_async(self, questions: List[str], answers: List[str], 

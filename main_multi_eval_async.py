@@ -11,7 +11,7 @@ from typing import Dict, Any, List
 from config import CHAT_CONFIG, EMBEDDING_CONFIG, ASYNC_CONFIG, get_enabled_rag_systems, validate_config
 from connectors.universal import UniversalRAGConnector
 from evaluators.factory import EvaluatorManager
-from evaluators.async_factory import AsyncEvaluatorManager
+from evaluators.evaluator_factory import EvaluatorManager as AsyncEvaluatorManager
 
 class AsyncMultiEvaluatorRAGSystem:
     """异步多评估器RAG评估系统"""
