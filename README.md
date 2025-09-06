@@ -46,7 +46,7 @@ ollama pull nomic-embed-text:latest
 # 运行完整评价
 python3 main_multi_eval_async.py
 # 查看结果
-# 结果保存在 results/detailed_evaluation_results.json/multi_evaluation_results.csv
+# 结果保存在 results/detailed_evaluation_results.json or multi_evaluation_results.csv
 ```
 
 ## 🧠 **评价器架构**
