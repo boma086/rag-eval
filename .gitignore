@@ -140,8 +140,8 @@ cython_debug/
 .env
 
 # 结果文件
-results/*.csv
-results/*.json
+#results/*.csv
+#results/*.json
 results/test
 
 # 调试文件
