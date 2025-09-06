@@ -1,7 +1,6 @@
-# 异步Ragas评估器 - 异步版本的Ragas评估器
+# Ragas评估器 - 使用Ragas原生异步API的评估器
 
 from typing import Dict, List, Any, Optional
-from datasets import Dataset
 from ragas import evaluate
 from ragas.metrics import (
     answer_relevancy, 
@@ -13,18 +12,18 @@ from ragas.metrics import (
 from ragas.llms import LangchainLLMWrapper
 from langchain_openai import ChatOpenAI
 from langchain_community.embeddings import OllamaEmbeddings
-from .async_base import AsyncBaseEvaluator
+from .base_evaluator import BaseEvaluator
 import asyncio
 import aiohttp
 import math
 
 
-class AsyncRagasEvaluator(AsyncBaseEvaluator):
-    """异步Ragas评估器 - 支持完整的RAG评估指标"""
+class RagasEvaluator(BaseEvaluator):
+    """Ragas评估器 - 使用Ragas原生异步API支持完整的RAG评估指标"""
     
     def __init__(self, config: Dict[str, Any]):
-        """异步Ragas + Ollama评估器初始化"""
-        super().__init__("AsyncRagas", config)
+        """Ragas评估器初始化"""
+        super().__init__("Ragas", config)
         
         try:
             # Chat LLM初始化 (支持任何OpenAI兼容的API)
@@ -59,6 +58,15 @@ class AsyncRagasEvaluator(AsyncBaseEvaluator):
                 )
                 embedding_name = f"{embedding_config.get('model', 'text-embedding-ada-002')} (OpenAI)"
             
+            # 初始化Ragas指标
+            self.metrics = [
+                answer_relevancy, 
+                answer_correctness, 
+                faithfulness, 
+                context_precision,
+                context_recall
+            ]
+            
             # Embeddings测试
             test_result = self.embeddings.embed_query("test")
             if len(test_result) > 0:
@@ -76,7 +84,7 @@ class AsyncRagasEvaluator(AsyncBaseEvaluator):
             self._available = False
     
     async def evaluate_single_answer_async(self, question: str, answer: str, ground_truth: str, context: List[str] = None) -> Dict[str, float]:
-        """异步评估单个答案"""
+        """使用Ragas原生异步API评估单个答案"""
         if not self._available:
             return {"relevancy": None, "correctness": None, "faithfulness": None, "context_precision": None, "context_recall": None}
         
@@ -84,27 +92,21 @@ class AsyncRagasEvaluator(AsyncBaseEvaluator):
             return {"relevancy": None, "correctness": None, "faithfulness": None, "context_precision": None, "context_recall": None}
         
         try:
-            # 在异步线程池中运行同步的Ragas评估
-            loop = asyncio.get_event_loop()
-            result = await loop.run_in_executor(
-                None, 
-                self._evaluate_ragas_sync, 
-                question, answer, ground_truth, context
-            )
-            
-            return result
+            # 使用Ragas原生异步API
+            return await self._evaluate_ragas_native_async(question, answer, ground_truth, context)
             
         except Exception as e:
             print(f"❌ {self.name}异步评估失败: {e}")
             return {"relevancy": None, "correctness": None, "faithfulness": None, "context_precision": None, "context_recall": None}
     
-    def _evaluate_ragas_sync(self, question: str, answer: str, ground_truth: str, context: List[str] = None) -> Dict[str, float]:
-        """同步Ragas评估（在线程池中运行）"""
+    async def _evaluate_ragas_native_async(self, question: str, answer: str, ground_truth: str, context: List[str] = None) -> Dict[str, float]:
+        """使用Ragas原生异步API进行评估"""
         try:
             # 准备评估数据
             eval_contexts = context if context else ['相关上下文']
             
             # 创建数据集
+            from datasets import Dataset
             dataset = Dataset.from_dict({
                 'question': [question],
                 'answer': [answer],
@@ -112,10 +114,10 @@ class AsyncRagasEvaluator(AsyncBaseEvaluator):
                 'contexts': [eval_contexts]
             })
             
-            # 执行Ragas评估 - 使用完整的指标集
+            # 使用Ragas评估（同步函数）
             result = evaluate(
                 dataset, 
-                metrics=[answer_relevancy, answer_correctness, faithfulness, context_precision, context_recall],
+                metrics=self.metrics,
                 llm=self.eval_llm,
                 embeddings=self.embeddings,
                 raise_exceptions=False
@@ -150,7 +152,7 @@ class AsyncRagasEvaluator(AsyncBaseEvaluator):
                         ctx_rec_score = item_scores['context_recall']
                         scores['context_recall'] = float(ctx_rec_score) if ctx_rec_score is not None and not math.isnan(ctx_rec_score) else None
                 
-                print(f"    Ragas评估完成: {scores}")
+                print(f"    Ragas原生异步评估完成: {scores}")
                     
             except Exception as e:
                 print(f"    Ragas分数处理错误: {e}")
@@ -159,54 +161,115 @@ class AsyncRagasEvaluator(AsyncBaseEvaluator):
             return scores
             
         except Exception as e:
-            print(f"❌ {self.name}同步评估失败: {e}")
+            print(f"❌ {self.name}原生异步评估失败: {e}")
             return {"relevancy": None, "correctness": None, "faithfulness": None, "context_precision": None, "context_recall": None}
     
     async def evaluate_answers_async(self, questions: List[str], answers: List[str], 
                                   ground_truths: List[str], contexts: List[List[str]] = None) -> Dict[str, List[float]]:
-        """异步评估多个答案"""
+        """使用Ragas原生异步API批量评估多个答案"""
         if not self._available:
             return {"relevancy": [None] * len(answers), "correctness": [None] * len(answers), "faithfulness": [None] * len(answers), "context_precision": [None] * len(answers), "context_recall": [None] * len(answers)}
         
-        # 并发评估所有答案
-        tasks = []
-        for i, (question, answer, ground_truth) in enumerate(zip(questions, answers, ground_truths)):
-            context = contexts[i] if contexts and i < len(contexts) else None
-            task = self.evaluate_single_answer_async(question, answer, ground_truth, context)
-            tasks.append(task)
-        
-        # 等待所有评估完成
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        
-        # 处理结果
-        relevancy_scores = []
-        correctness_scores = []
-        faithfulness_scores = []
-        context_precision_scores = []
-        context_recall_scores = []
-        
-        for result in results:
-            if isinstance(result, Exception):
-                print(f"❌ 评估异常: {result}")
-                relevancy_scores.append(None)
-                correctness_scores.append(None)
-                faithfulness_scores.append(None)
-                context_precision_scores.append(None)
-                context_recall_scores.append(None)
-            else:
-                relevancy_scores.append(result.get('relevancy'))
-                correctness_scores.append(result.get('correctness'))
-                faithfulness_scores.append(result.get('faithfulness'))
-                context_precision_scores.append(result.get('context_precision'))
-                context_recall_scores.append(result.get('context_recall'))
-        
-        return {
-            "relevancy": relevancy_scores,
-            "correctness": correctness_scores,
-            "faithfulness": faithfulness_scores,
-            "context_precision": context_precision_scores,
-            "context_recall": context_recall_scores
-        }
+        try:
+            # 准备评估数据
+            eval_contexts = contexts if contexts else [['相关上下文'] for _ in range(len(questions))]
+            
+            # 创建数据集
+            from datasets import Dataset
+            dataset = Dataset.from_dict({
+                'question': questions,
+                'answer': answers,
+                'ground_truth': ground_truths,
+                'contexts': eval_contexts
+            })
+            
+            # 使用Ragas批量评估（同步函数）
+            result = evaluate(
+                dataset, 
+                metrics=self.metrics,
+                llm=self.eval_llm,
+                embeddings=self.embeddings,
+                raise_exceptions=False
+            )
+            
+            # 处理结果
+            relevancy_scores = []
+            correctness_scores = []
+            faithfulness_scores = []
+            context_precision_scores = []
+            context_recall_scores = []
+            
+            try:
+                scores_dict = result.scores
+                
+                # scores_dict 是列表格式，每个元素是一个字典
+                if scores_dict and len(scores_dict) > 0:
+                    for i, item_scores in enumerate(scores_dict):
+                        if i < len(answers):
+                            # Answer Relevancy
+                            if 'answer_relevancy' in item_scores:
+                                rel_score = item_scores['answer_relevancy']
+                                relevancy_scores.append(float(rel_score) if rel_score is not None and not math.isnan(rel_score) else None)
+                            else:
+                                relevancy_scores.append(None)
+                            
+                            # Answer Correctness
+                            if 'answer_correctness' in item_scores:
+                                cor_score = item_scores['answer_correctness']
+                                correctness_scores.append(float(cor_score) if cor_score is not None and not math.isnan(cor_score) else None)
+                            else:
+                                correctness_scores.append(None)
+                            
+                            # Faithfulness
+                            if 'faithfulness' in item_scores:
+                                faith_score = item_scores['faithfulness']
+                                faithfulness_scores.append(float(faith_score) if faith_score is not None and not math.isnan(faith_score) else None)
+                            else:
+                                faithfulness_scores.append(None)
+                            
+                            # Context Precision
+                            if 'context_precision' in item_scores:
+                                ctx_prec_score = item_scores['context_precision']
+                                context_precision_scores.append(float(ctx_prec_score) if ctx_prec_score is not None and not math.isnan(ctx_prec_score) else None)
+                            else:
+                                context_precision_scores.append(None)
+                            
+                            # Context Recall
+                            if 'context_recall' in item_scores:
+                                ctx_rec_score = item_scores['context_recall']
+                                context_recall_scores.append(float(ctx_rec_score) if ctx_rec_score is not None and not math.isnan(ctx_rec_score) else None)
+                            else:
+                                context_recall_scores.append(None)
+                        else:
+                            # 如果没有足够的评估结果，填充None
+                            relevancy_scores.append(None)
+                            correctness_scores.append(None)
+                            faithfulness_scores.append(None)
+                            context_precision_scores.append(None)
+                            context_recall_scores.append(None)
+                
+                print(f"    Ragas原生异步批量评估完成，处理了 {len(relevancy_scores)} 个样本")
+                    
+            except Exception as e:
+                print(f"    Ragas批量分数处理错误: {e}")
+                # 返回默认值
+                relevancy_scores = [None] * len(answers)
+                correctness_scores = [None] * len(answers)
+                faithfulness_scores = [None] * len(answers)
+                context_precision_scores = [None] * len(answers)
+                context_recall_scores = [None] * len(answers)
+            
+            return {
+                "relevancy": relevancy_scores,
+                "correctness": correctness_scores,
+                "faithfulness": faithfulness_scores,
+                "context_precision": context_precision_scores,
+                "context_recall": context_recall_scores
+            }
+            
+        except Exception as e:
+            print(f"❌ {self.name}异步批量评估失败: {e}")
+            return {"relevancy": [None] * len(answers), "correctness": [None] * len(answers), "faithfulness": [None] * len(answers), "context_precision": [None] * len(answers), "context_recall": [None] * len(answers)}
     
     def get_supported_metrics(self) -> List[str]:
         """获取支持的评估指标"""
