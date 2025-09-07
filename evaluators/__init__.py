@@ -1,21 +1,16 @@
-# 評価器モジュール - 統一インターフェース (すべて非同期バージョンを使用)
+# 评估器模块 - 统一接口 (全部使用异步版本)
 
 from .base import BaseEvaluator
-from .base_evaluator import BaseEvaluator as AsyncBaseEvaluator
 from .academic_evaluator import AcademicEvaluator
 from .ragas_evaluator import RagasEvaluator
-from .factory import EvaluatorFactory, EvaluatorManager  # Legacy classes
-from .evaluator_factory import EvaluatorFactory as AsyncEvaluatorFactory, EvaluatorManager as AsyncEvaluatorManager
+from .factory import EvaluatorFactory, EvaluatorManager
 
-# 注: すべての評価器は非同期APIをサポートしています
+# 注意: 所有评估器都支持异步API
 
 __all__ = [
     'BaseEvaluator',
-    'AsyncBaseEvaluator',
     'AcademicEvaluator',
     'RagasEvaluator',
-    'EvaluatorFactory',     # Legacy
-    'EvaluatorManager',     # Legacy
-    'AsyncEvaluatorFactory',
-    'AsyncEvaluatorManager'
+    'EvaluatorFactory',
+    'EvaluatorManager'
 ]

@@ -4,12 +4,16 @@ import aiohttp
 import asyncio
 import logging
 from typing import Dict, Any, List
-from .async_base import AsyncBaseRAGConnector
+from .base import AsyncBaseRAGConnector
 
 logger = logging.getLogger(__name__)
 
 class DifyConnector(AsyncBaseRAGConnector):
     """Dify RAG系统连接器"""
+    
+    def __init__(self, config: Dict[str, Any]):
+        """初始化Dify连接器"""
+        super().__init__("Dify", config)
     
     def validate_config(self) -> List[str]:
         """验证Dify配置"""
@@ -37,10 +41,9 @@ class DifyConnector(AsyncBaseRAGConnector):
                     "instruction": "Please help with software development questions"
                 },
                 "query": question,
-                "response_mode": "blocking",
-                "conversation_id": None,
-                "user": user_id,
-                "files": []
+                "response_mode": "streaming",
+                "auto_generate_name": True,
+                "user": user_id
             }
         }
     
@@ -54,7 +57,11 @@ class DifyConnector(AsyncBaseRAGConnector):
             async with aiohttp.ClientSession() as session:
                 async with session.post(url, headers=headers, json=body) as response:
                     if response.status == 200:
-                        return await response.json()
+                        # 检查是否是streaming模式
+                        if body.get("response_mode") == "streaming":
+                            return await self._parse_streaming_response(response)
+                        else:
+                            return await response.json()
                     else:
                         error_text = await response.text()
                         raise Exception(f"Dify API error: {response.status} - {error_text}")
@@ -62,6 +69,48 @@ class DifyConnector(AsyncBaseRAGConnector):
             raise Exception("Dify API请求超时")
         except Exception as e:
             raise Exception(f"Dify API请求失败: {str(e)}")
+    
+    async def _parse_streaming_response(self, response) -> Dict[str, Any]:
+        """解析streaming响应"""
+        import json
+        
+        message_events = []
+        message_end_result = None
+        
+        async for line in response.content:
+            line = line.decode('utf-8').strip()
+            if line.startswith('data: '):
+                try:
+                    data = json.loads(line[6:])  # 移除 'data: ' 前缀
+                    event_type = data.get("event")
+                    
+                    if event_type == "message":
+                        message_events.append(data)
+                    elif event_type == "message_end":
+                        message_end_result = data
+                        break  # 找到message_end后停止，这是最完整的响应
+                        
+                except json.JSONDecodeError:
+                    continue
+        
+        # 合并所有message事件的答案
+        full_answer = ""
+        for msg in message_events:
+            if "answer" in msg:
+                full_answer += msg["answer"]
+        
+        # 使用message_end作为基础，它包含完整的metadata
+        if message_end_result:
+            final_result = message_end_result
+            final_result["answer"] = full_answer
+            return final_result
+        elif message_events:
+            # 如果没有message_end，使用最后一个message事件
+            last_message = message_events[-1]
+            last_message["answer"] = full_answer
+            return last_message
+        else:
+            raise Exception("无法从streaming响应中解析出有效消息")
 
     async def query_async(self, question: str, max_retries: int = 2, **kwargs) -> Dict[str, Any]:
         """异步查询Dify系统"""

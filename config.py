@@ -2,8 +2,12 @@
 
 import os
 import glob
+import warnings
 from dotenv import load_dotenv
 from pathlib import Path
+
+# 过滤 Pydantic 命名空间冲突警告
+warnings.filterwarnings("ignore", category=UserWarning, message="Field \"model_name\" has conflict with protected namespace")
 
 def load_all_env_files():
     """加载所有配置文件"""

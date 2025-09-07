@@ -2,7 +2,11 @@
 
 from typing import Dict, List, Any, Optional
 from langchain_openai import ChatOpenAI
-from .base_evaluator import BaseEvaluator
+from .base import BaseEvaluator
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils.embedding_adapter import EmbeddingAdapterFactory, detect_embedding_config
 import json
 import re
 import asyncio
@@ -27,12 +31,21 @@ class AcademicEvaluator(BaseEvaluator):
                 temperature=0
             )
             
-            # 可选：初始化嵌入模型配置（用于语义相似度计算）
-            self.embedding_config = {
+            # 初始化通用嵌入适配器
+            embedding_config = {
                 "api_key": config.get("embedding_api_key", ""),
                 "base_url": config.get("embedding_base_url"),
-                "model": config.get("embedding_model", "nomic-embed-text:latest")
+                "model": config.get("embedding_model", "nomic-embed-text:latest"),
+                "timeout": config.get("embedding_timeout", 30)
             }
+            
+            # 创建通用嵌入适配器
+            try:
+                self.embedding_adapter = EmbeddingAdapterFactory.create_adapter(embedding_config)
+                print(f"✅ 通用嵌入适配器初始化成功: {embedding_config['model']}")
+            except Exception as e:
+                print(f"⚠️  嵌入适配器初始化失败，将使用文本相似度: {e}")
+                self.embedding_adapter = None
             
             # 评估模式：pure_chat（纯聊天模型）或 hybrid（混合模式）
             self.evaluation_mode = config.get("evaluation_mode", "pure_chat")
@@ -96,7 +109,7 @@ class AcademicEvaluator(BaseEvaluator):
         """异步评估单个回答 - 支持多种评估模式和质量指标"""
         
         try:
-            if self.evaluation_mode == "hybrid" and self.embedding_config["api_key"]:
+            if self.evaluation_mode == "hybrid" and self.embedding_adapter:
                 # 混合模式：使用嵌入模型计算相关性，聊天模型计算质量指标
                 return await self._evaluate_hybrid_mode(question, answer, ground_truth, context)
             else:
@@ -214,82 +227,39 @@ class AcademicEvaluator(BaseEvaluator):
             return self._get_enhanced_default_scores()
     
     async def _calculate_semantic_similarity(self, answer: str, ground_truth: str) -> float:
-        """使用嵌入模型计算语义相似度（混合模式用）- 优化版本"""
+        """使用嵌入模型计算语义相似度（混合模式用）- 使用通用适配器"""
         
         try:
-            # 如果没有嵌入配置，直接使用文本相似度
-            if not self.embedding_config.get("api_key"):
+            # 如果没有嵌入适配器，直接使用文本相似度
+            if not self.embedding_adapter:
+                print("🔍 嵌入适配器不可用，使用文本相似度")
                 return self._calculate_text_similarity(answer, ground_truth)
             
             # 并发获取两个文本的嵌入向量
-            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session:
-                headers = {
-                    "Authorization": f"Bearer {self.embedding_config['api_key']}",
-                    "Content-Type": "application/json"
-                }
-                
-                # 获取回答的嵌入向量
-                answer_payload = {
-                    "model": self.embedding_config["model"],
-                    "input": answer  # 使用标准的 input 字段
-                }
-                
-                # 获取标准答案的嵌入向量
-                ground_truth_payload = {
-                    "model": self.embedding_config["model"],
-                    "input": ground_truth
-                }
-                
-                # 并发请求两个嵌入向量
-                answer_task = session.post(
-                    f"{self.embedding_config['base_url'].rstrip('/')}/embeddings",
-                    headers=headers,
-                    json=answer_payload
-                )
-                
-                ground_truth_task = session.post(
-                    f"{self.embedding_config['base_url'].rstrip('/')}/embeddings",
-                    headers=headers,
-                    json=ground_truth_payload
-                )
-                
-                answer_response, ground_truth_response = await asyncio.gather(
-                    answer_task, ground_truth_task, return_exceptions=True
-                )
-                
-                # 处理回答嵌入向量
-                if isinstance(answer_response, Exception):
-                    print(f"❌ 回答嵌入向量获取失败: {answer_response}")
-                    return self._calculate_text_similarity(answer, ground_truth)
-                
-                if answer_response.status != 200:
-                    print(f"❌ 回答嵌入向量请求失败: {answer_response.status}")
-                    return self._calculate_text_similarity(answer, ground_truth)
-                
-                answer_result = await answer_response.json()
-                # 支持多种API格式
-                answer_embedding = answer_result.get("data", [{}])[0].get("embedding", []) if "data" in answer_result else answer_result.get("embedding", [])
-                
-                # 处理标准答案嵌入向量
-                if isinstance(ground_truth_response, Exception):
-                    print(f"❌ 标准答案嵌入向量获取失败: {ground_truth_response}")
-                    return self._calculate_text_similarity(answer, ground_truth)
-                
-                if ground_truth_response.status != 200:
-                    print(f"❌ 标准答案嵌入向量请求失败: {ground_truth_response.status}")
-                    return self._calculate_text_similarity(answer, ground_truth)
-                
-                ground_truth_result = await ground_truth_response.json()
-                ground_truth_embedding = ground_truth_result.get("data", [{}])[0].get("embedding", []) if "data" in ground_truth_result else ground_truth_result.get("embedding", [])
-                
-                # 计算余弦相似度
-                if len(answer_embedding) > 0 and len(ground_truth_embedding) > 0:
-                    similarity = self._calculate_cosine_similarity(answer_embedding, ground_truth_embedding)
-                    print(f"🔍 嵌入向量语义相似度: {similarity:.4f}")
-                    return similarity
-                else:
-                    print(f"❌ 嵌入向量为空 - answer: {len(answer_embedding)}, ground_truth: {len(ground_truth_embedding)}")
-                    return self._calculate_text_similarity(answer, ground_truth)
+            answer_task = self.embedding_adapter.embed_query(answer)
+            ground_truth_task = self.embedding_adapter.embed_query(ground_truth)
+            
+            answer_embedding, ground_truth_embedding = await asyncio.gather(
+                answer_task, ground_truth_task, return_exceptions=True
+            )
+            
+            # 处理异常情况
+            if isinstance(answer_embedding, Exception):
+                print(f"❌ 回答嵌入向量获取失败: {answer_embedding}")
+                return self._calculate_text_similarity(answer, ground_truth)
+            
+            if isinstance(ground_truth_embedding, Exception):
+                print(f"❌ 标准答案嵌入向量获取失败: {ground_truth_embedding}")
+                return self._calculate_text_similarity(answer, ground_truth)
+            
+            # 计算余弦相似度
+            if len(answer_embedding) > 0 and len(ground_truth_embedding) > 0:
+                similarity = self._calculate_cosine_similarity(answer_embedding, ground_truth_embedding)
+                print(f"🔍 嵌入向量语义相似度: {similarity:.4f}")
+                return similarity
+            else:
+                print(f"❌ 嵌入向量为空 - answer: {len(answer_embedding)}, ground_truth: {len(ground_truth_embedding)}")
+                return self._calculate_text_similarity(answer, ground_truth)
                         
         except Exception as e:
             print(f"嵌入模型调用失败: {e}")

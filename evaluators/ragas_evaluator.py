@@ -12,7 +12,7 @@ from ragas.metrics import (
 from ragas.llms import LangchainLLMWrapper
 from langchain_openai import ChatOpenAI
 from langchain_community.embeddings import OllamaEmbeddings
-from .base_evaluator import BaseEvaluator
+from .base import BaseEvaluator
 import asyncio
 import aiohttp
 import math
@@ -102,8 +102,8 @@ class RagasEvaluator(BaseEvaluator):
     async def _evaluate_ragas_native_async(self, question: str, answer: str, ground_truth: str, context: List[str] = None) -> Dict[str, float]:
         """使用Ragas原生异步API进行评估"""
         try:
-            # 准备评估数据
-            eval_contexts = context if context else ['相关上下文']
+            # 准备评估数据 - Ragas需要retrieved_contexts字段
+            retrieved_contexts = context if context else ['No relevant context provided']
             
             # 创建数据集
             from datasets import Dataset
@@ -111,7 +111,7 @@ class RagasEvaluator(BaseEvaluator):
                 'question': [question],
                 'answer': [answer],
                 'ground_truth': [ground_truth],
-                'contexts': [eval_contexts]
+                'retrieved_contexts': [retrieved_contexts]
             })
             
             # 使用Ragas评估（同步函数）
@@ -171,8 +171,8 @@ class RagasEvaluator(BaseEvaluator):
             return {"relevancy": [None] * len(answers), "correctness": [None] * len(answers), "faithfulness": [None] * len(answers), "context_precision": [None] * len(answers), "context_recall": [None] * len(answers)}
         
         try:
-            # 准备评估数据
-            eval_contexts = contexts if contexts else [['相关上下文'] for _ in range(len(questions))]
+            # 准备评估数据 - Ragas需要retrieved_contexts字段
+            retrieved_contexts = contexts if contexts else [['No relevant context provided'] for _ in range(len(questions))]
             
             # 创建数据集
             from datasets import Dataset
@@ -180,7 +180,7 @@ class RagasEvaluator(BaseEvaluator):
                 'question': questions,
                 'answer': answers,
                 'ground_truth': ground_truths,
-                'contexts': eval_contexts
+                'retrieved_contexts': retrieved_contexts
             })
             
             # 使用Ragas批量评估（同步函数）
