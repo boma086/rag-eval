@@ -11,7 +11,6 @@ from typing import Dict, Any, List
 from config import CHAT_CONFIG, EMBEDDING_CONFIG, ASYNC_CONFIG, get_enabled_rag_systems, validate_config
 from connectors.universal import UniversalRAGConnector
 from evaluators.factory import EvaluatorManager
-from evaluators.async_factory import AsyncEvaluatorManager
 
 class AsyncMultiEvaluatorRAGSystem:
     """异步多评估器RAG评估系统"""
@@ -39,7 +38,7 @@ class AsyncMultiEvaluatorRAGSystem:
             raise ValueError("没有可用的RAG系统")
         
         # 初始化异步评估器管理器
-        self.async_evaluator_manager = AsyncEvaluatorManager(CHAT_CONFIG, EMBEDDING_CONFIG)
+        self.async_evaluator_manager = EvaluatorManager(CHAT_CONFIG, EMBEDDING_CONFIG)
     
     async def load_test_cases(self, file_path: str) -> list:
         """加载测试用例"""

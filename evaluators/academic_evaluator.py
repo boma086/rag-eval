@@ -1,9 +1,12 @@
-# 增强异步学术评估器 - 合并学术和混合模型优势
+# 增强学术评估器 - 合并学术和混合模型优势
 
 from typing import Dict, List, Any, Optional
 from langchain_openai import ChatOpenAI
-from .async_base import AsyncBaseEvaluator
 from .base import BaseEvaluator
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils.embedding_adapter import EmbeddingAdapterFactory, detect_embedding_config
 import json
 import re
 import asyncio
@@ -12,12 +15,12 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-class AsyncAcademicEvaluator(AsyncBaseEvaluator):
-    """增强异步学术评估器 - 支持可选的嵌入模型辅助评估"""
+class AcademicEvaluator(BaseEvaluator):
+    """增强学术评估器 - 支持可选的嵌入模型辅助评估"""
     
     def __init__(self, config: Dict[str, Any]):
-        """初始化增强异步学术评估器"""
-        super().__init__("AsyncAcademic", config)
+        """初始化增强学术评估器"""
+        super().__init__("Academic", config)
         
         try:
             # 初始化聊天模型（主要评估模型）
@@ -28,20 +31,29 @@ class AsyncAcademicEvaluator(AsyncBaseEvaluator):
                 temperature=0
             )
             
-            # 可选：初始化嵌入模型配置（用于语义相似度计算）
-            self.embedding_config = {
+            # 初始化通用嵌入适配器
+            embedding_config = {
                 "api_key": config.get("embedding_api_key", ""),
                 "base_url": config.get("embedding_base_url"),
-                "model": config.get("embedding_model", "nomic-embed-text:latest")
+                "model": config.get("embedding_model", "nomic-embed-text:latest"),
+                "timeout": config.get("embedding_timeout", 30)
             }
+            
+            # 创建通用嵌入适配器
+            try:
+                self.embedding_adapter = EmbeddingAdapterFactory.create_adapter(embedding_config)
+                logger.info(f"✅ 通用嵌入适配器初始化成功: {embedding_config['model']}")
+            except Exception as e:
+                logger.warning(f"⚠️  嵌入适配器初始化失败，将使用文本相似度: {e}")
+                self.embedding_adapter = None
             
             # 评估模式：pure_chat（纯聊天模型）或 hybrid（混合模式）
             self.evaluation_mode = config.get("evaluation_mode", "pure_chat")
             
             self._available = True
-            print(f"✅ {self.name}增强异步评估器初始化成功 (模式: {self.evaluation_mode})")
+            logger.info(f"✅ {self.name}增强评估器初始化成功 (模式: {self.evaluation_mode})")
         except Exception as e:
-            print(f"❌ {self.name}增强异步评估器初始化失败: {e}")
+            logger.error(f"❌ {self.name}增强评估器初始化失败: {e}")
             self._available = False
     
     async def evaluate_answers_async(self, questions: List[str], answers: List[str], 
@@ -74,7 +86,7 @@ class AsyncAcademicEvaluator(AsyncBaseEvaluator):
         
         for result in results:
             if isinstance(result, Exception):
-                print(f"评估异常: {result}")
+                logger.error(f"评估异常: {result}")
                 relevancy_scores.append(0.0)
                 correctness_scores.append(0.0)
                 completeness_scores.append(0.0)
@@ -97,7 +109,7 @@ class AsyncAcademicEvaluator(AsyncBaseEvaluator):
         """异步评估单个回答 - 支持多种评估模式和质量指标"""
         
         try:
-            if self.evaluation_mode == "hybrid" and self.embedding_config["api_key"]:
+            if self.evaluation_mode == "hybrid" and self.embedding_adapter:
                 # 混合模式：使用嵌入模型计算相关性，聊天模型计算质量指标
                 return await self._evaluate_hybrid_mode(question, answer, ground_truth, context)
             else:
@@ -105,7 +117,7 @@ class AsyncAcademicEvaluator(AsyncBaseEvaluator):
                 return await self._evaluate_pure_chat_mode(question, answer, ground_truth, context)
                         
         except Exception as e:
-            print(f"异步评估错误: {e}")
+            logger.error(f"异步评估错误: {e}")
             return self._get_enhanced_default_scores()
     
     async def _evaluate_hybrid_mode(self, question: str, answer: str, ground_truth: str, context: List[str] = None) -> Dict[str, float]:
@@ -121,11 +133,11 @@ class AsyncAcademicEvaluator(AsyncBaseEvaluator):
             
             # 处理异常情况
             if isinstance(relevancy_score, Exception):
-                print(f"语义相似度计算失败: {relevancy_score}")
+                logger.error(f"语义相似度计算失败: {relevancy_score}")
                 relevancy_score = 0.0
             
             if isinstance(quality_scores, Exception):
-                print(f"质量评估失败: {quality_scores}")
+                logger.error(f"质量评估失败: {quality_scores}")
                 quality_scores = self._get_default_quality_scores()
             
             # 合并结果
@@ -135,7 +147,7 @@ class AsyncAcademicEvaluator(AsyncBaseEvaluator):
             }
             
         except Exception as e:
-            print(f"混合评估错误: {e}")
+            logger.error(f"混合评估错误: {e}")
             return self._get_enhanced_default_scores()
     
     async def _evaluate_pure_chat_mode(self, question: str, answer: str, ground_truth: str, context: List[str] = None) -> Dict[str, float]:
@@ -192,7 +204,7 @@ class AsyncAcademicEvaluator(AsyncBaseEvaluator):
                     "temperature": 0
                 }
                 
-                print(f"🔍 增强异步评估请求发送中...")
+                logger.debug(f"🔍 增强异步评估请求发送中...")
                 async with session.post(
                     f"{self.config.get('chat_base_url', self.config.get('base_url')).rstrip('/')}/chat/completions",
                     headers=headers,
@@ -201,94 +213,56 @@ class AsyncAcademicEvaluator(AsyncBaseEvaluator):
                     if response.status == 200:
                         result = await response.json()
                         result_text = result["choices"][0]["message"]["content"].strip()
-                        print(f"🔍 增强异步评估响应接收: {result_text[:100]}...")
+                        logger.debug(f"🔍 增强异步评估响应接收: {result_text[:100]}...")
                         
                         # 解析增强评分
                         return self._parse_enhanced_scores(result_text)
                     else:
                         error_text = await response.text()
-                        print(f"❌ API请求失败: {response.status} - {error_text}")
+                        logger.error(f"❌ API请求失败: {response.status} - {error_text}")
                         return self._get_enhanced_default_scores()
                         
         except Exception as e:
-            print(f"纯聊天模式评估错误: {e}")
+            logger.error(f"纯聊天模式评估错误: {e}")
             return self._get_enhanced_default_scores()
     
     async def _calculate_semantic_similarity(self, answer: str, ground_truth: str) -> float:
-        """使用嵌入模型计算语义相似度（混合模式用）"""
+        """使用嵌入模型计算语义相似度（混合模式用）- 使用通用适配器"""
         
         try:
+            # 如果没有嵌入适配器，直接使用文本相似度
+            if not self.embedding_adapter:
+                logger.debug("🔍 嵌入适配器不可用，使用文本相似度")
+                return self._calculate_text_similarity(answer, ground_truth)
+            
             # 并发获取两个文本的嵌入向量
-            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session:
-                headers = {
-                    "Authorization": f"Bearer {self.embedding_config['api_key']}",
-                    "Content-Type": "application/json"
-                }
-                
-                # 获取回答的嵌入向量
-                answer_payload = {
-                    "model": self.embedding_config["model"],
-                    "prompt": answer
-                }
-                
-                # 获取标准答案的嵌入向量
-                ground_truth_payload = {
-                    "model": self.embedding_config["model"],
-                    "prompt": ground_truth
-                }
-                
-                # 并发请求两个嵌入向量
-                answer_task = session.post(
-                    f"{self.embedding_config['base_url'].rstrip('/')}/api/embeddings",
-                    headers=headers,
-                    json=answer_payload
-                )
-                
-                ground_truth_task = session.post(
-                    f"{self.embedding_config['base_url'].rstrip('/')}/api/embeddings",
-                    headers=headers,
-                    json=ground_truth_payload
-                )
-                
-                answer_response, ground_truth_response = await asyncio.gather(
-                    answer_task, ground_truth_task, return_exceptions=True
-                )
-                
-                # 处理回答嵌入向量
-                if isinstance(answer_response, Exception):
-                    print(f"❌ 回答嵌入向量获取失败: {answer_response}")
-                    return self._calculate_text_similarity(answer, ground_truth)
-                
-                if answer_response.status != 200:
-                    print(f"❌ 回答嵌入向量请求失败: {answer_response.status}")
-                    return self._calculate_text_similarity(answer, ground_truth)
-                
-                answer_result = await answer_response.json()
-                answer_embedding = answer_result.get("embedding", [])
-                
-                # 处理标准答案嵌入向量
-                if isinstance(ground_truth_response, Exception):
-                    print(f"❌ 标准答案嵌入向量获取失败: {ground_truth_response}")
-                    return self._calculate_text_similarity(answer, ground_truth)
-                
-                if ground_truth_response.status != 200:
-                    print(f"❌ 标准答案嵌入向量请求失败: {ground_truth_response.status}")
-                    return self._calculate_text_similarity(answer, ground_truth)
-                
-                ground_truth_result = await ground_truth_response.json()
-                ground_truth_embedding = ground_truth_result.get("embedding", [])
-                
-                # 计算余弦相似度
-                if len(answer_embedding) > 0 and len(ground_truth_embedding) > 0:
-                    similarity = self._calculate_cosine_similarity(answer_embedding, ground_truth_embedding)
-                    print(f"🔍 嵌入向量语义相似度: {similarity}")
-                    return similarity
-                else:
-                    print(f"❌ 嵌入向量为空")
-                    return self._calculate_text_similarity(answer, ground_truth)
+            answer_task = self.embedding_adapter.embed_query(answer)
+            ground_truth_task = self.embedding_adapter.embed_query(ground_truth)
+            
+            answer_embedding, ground_truth_embedding = await asyncio.gather(
+                answer_task, ground_truth_task, return_exceptions=True
+            )
+            
+            # 处理异常情况
+            if isinstance(answer_embedding, Exception):
+                logger.error(f"❌ 回答嵌入向量获取失败: {answer_embedding}")
+                return self._calculate_text_similarity(answer, ground_truth)
+            
+            if isinstance(ground_truth_embedding, Exception):
+                logger.error(f"❌ 标准答案嵌入向量获取失败: {ground_truth_embedding}")
+                return self._calculate_text_similarity(answer, ground_truth)
+            
+            # 计算余弦相似度
+            if len(answer_embedding) > 0 and len(ground_truth_embedding) > 0:
+                similarity = self._calculate_cosine_similarity(answer_embedding, ground_truth_embedding)
+                logger.debug(f"🔍 嵌入向量语义相似度: {similarity:.4f}")
+                return similarity
+            else:
+                logger.error(f"❌ 嵌入向量为空 - answer: {len(answer_embedding)}, ground_truth: {len(ground_truth_embedding)}")
+                return self._calculate_text_similarity(answer, ground_truth)
                         
         except Exception as e:
-            print(f"嵌入模型调用失败: {e}")
+            logger.error(f"嵌入模型调用失败: {e}")
             return self._calculate_text_similarity(answer, ground_truth)
     
     async def _assess_enhanced_quality_with_chat_model(self, question: str, answer: str, ground_truth: str, context: List[str] = None) -> Dict[str, float]:
@@ -343,16 +317,16 @@ class AsyncAcademicEvaluator(AsyncBaseEvaluator):
                     if response.status == 200:
                         result = await response.json()
                         result_text = result["choices"][0]["message"]["content"].strip()
-                        print(f"🔍 质量评估响应: {result_text[:100]}...")
+                        logger.debug(f"🔍 质量评估响应: {result_text[:100]}...")
                         
                         return self._parse_quality_scores(result_text)
                     else:
                         error_text = await response.text()
-                        print(f"❌ 聊天模型请求失败: {response.status} - {error_text}")
+                        logger.error(f"❌ 聊天模型请求失败: {response.status} - {error_text}")
                         return self._get_default_quality_scores()
                         
         except Exception as e:
-            print(f"聊天模型质量评估失败: {e}")
+            logger.error(f"聊天模型质量评估失败: {e}")
             return self._get_default_quality_scores()
     
     def _parse_scores(self, result_text: str) -> Dict[str, float]:
@@ -396,7 +370,7 @@ class AsyncAcademicEvaluator(AsyncBaseEvaluator):
                 except:
                     scores[metric] = 0.5
         
-        print(f"解析的增强评分: {scores}")
+        logger.debug(f"解析的增强评分: {scores}")
         return scores
     
     def _parse_quality_scores(self, result_text: str) -> Dict[str, float]:
@@ -432,7 +406,7 @@ class AsyncAcademicEvaluator(AsyncBaseEvaluator):
                 except:
                     scores[metric] = 0.5
         
-        print(f"解析的质量评分: {scores}")
+        logger.debug(f"解析的质量评分: {scores}")
         return scores
     
     async def _get_default_result(self) -> Dict[str, float]:
@@ -452,7 +426,7 @@ class AsyncAcademicEvaluator(AsyncBaseEvaluator):
             import math
             
             if len(vec1) != len(vec2):
-                print(f"❌ 向量维度不匹配: {len(vec1)} vs {len(vec2)}")
+                logger.error(f"❌ 向量维度不匹配: {len(vec1)} vs {len(vec2)}")
                 return 0.0
             
             # 计算点积
@@ -472,7 +446,7 @@ class AsyncAcademicEvaluator(AsyncBaseEvaluator):
             return max(0.0, min(1.0, cosine_similarity))
             
         except Exception as e:
-            print(f"余弦相似度计算失败: {e}")
+            logger.error(f"余弦相似度计算失败: {e}")
             return 0.0
     
     def _calculate_text_similarity(self, text1: str, text2: str) -> float:
@@ -497,7 +471,7 @@ class AsyncAcademicEvaluator(AsyncBaseEvaluator):
             return similarity
             
         except Exception as e:
-            print(f"文本相似度计算失败: {e}")
+            logger.error(f"文本相似度计算失败: {e}")
             return 0.0
     
     def _get_default_quality_scores(self) -> Dict[str, float]:

@@ -4,7 +4,7 @@ import aiohttp
 import asyncio
 import logging
 from typing import Dict, Any, List
-from .async_base import AsyncBaseRAGConnector
+from .base import AsyncBaseRAGConnector
 
 logger = logging.getLogger(__name__)
 

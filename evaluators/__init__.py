@@ -1,24 +1,16 @@
-# 評価器モジュール - 統一インターフェース
+# 评估器模块 - 统一接口 (全部使用异步版本)
 
 from .base import BaseEvaluator
-from .ragas_ollama import RagasOllamaEvaluator  # Re-enabled with compatible versions
-# from .academic_evaluator import AcademicEvaluator  # Removed in favor of async version
+from .academic_evaluator import AcademicEvaluator
+from .ragas_evaluator import RagasEvaluator
 from .factory import EvaluatorFactory, EvaluatorManager
-from .async_base import AsyncBaseEvaluator
-from .async_academic_evaluator import AsyncAcademicEvaluator
-from .async_ragas_evaluator import AsyncRagasEvaluator
-from .async_factory import AsyncEvaluatorFactory, AsyncEvaluatorManager
+
+# 注意: 所有评估器都支持异步API
 
 __all__ = [
     'BaseEvaluator',
-    'RagasOllamaEvaluator',  # Re-enabled with compatible versions
-    'AsyncRagasEvaluator',   # Renamed from AsyncRagasOllamaEvaluator
-    # 'AcademicEvaluator',  # Removed in favor of async version
+    'AcademicEvaluator',
+    'RagasEvaluator',
     'EvaluatorFactory',
-    'EvaluatorManager',
-    'AsyncBaseEvaluator',
-    'AsyncAcademicEvaluator',
-    'AsyncRagasOllamaEvaluator',
-    'AsyncEvaluatorFactory',
-    'AsyncEvaluatorManager'
+    'EvaluatorManager'
 ]
