@@ -16,6 +16,9 @@ from .base import BaseEvaluator
 import asyncio
 import aiohttp
 import math
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class RagasEvaluator(BaseEvaluator):
@@ -70,17 +73,17 @@ class RagasEvaluator(BaseEvaluator):
             # Embeddings测试
             test_result = self.embeddings.embed_query("test")
             if len(test_result) > 0:
-                print(f"✅ Embeddings初始化成功: {embedding_name}")
+                logger.info(f"✅ Embeddings初始化成功: {embedding_name}")
             else:
                 raise ValueError("Embeddings test failed")
             
             self._available = True
-            print(f"✅ {self.name}评估器初始化成功")
-            print(f"   Chat: {config.get('model', 'gpt-3.5-turbo')}")
-            print(f"   Embeddings: {embedding_name}")
+            logger.info(f"✅ {self.name}评估器初始化成功")
+            logger.info(f"   Chat: {config.get('model', 'gpt-3.5-turbo')}")
+            logger.info(f"   Embeddings: {embedding_name}")
             
         except Exception as e:
-            print(f"❌ {self.name}评估器初始化失败: {e}")
+            logger.error(f"❌ {self.name}评估器初始化失败: {e}")
             self._available = False
     
     async def evaluate_single_answer_async(self, question: str, answer: str, ground_truth: str, context: List[str] = None) -> Dict[str, float]:
@@ -96,7 +99,7 @@ class RagasEvaluator(BaseEvaluator):
             return await self._evaluate_ragas_native_async(question, answer, ground_truth, context)
             
         except Exception as e:
-            print(f"❌ {self.name}异步评估失败: {e}")
+            logger.error(f"❌ {self.name}异步评估失败: {e}")
             return {"relevancy": None, "correctness": None, "faithfulness": None, "context_precision": None, "context_recall": None}
     
     async def _evaluate_ragas_native_async(self, question: str, answer: str, ground_truth: str, context: List[str] = None) -> Dict[str, float]:
@@ -114,9 +117,10 @@ class RagasEvaluator(BaseEvaluator):
                 'retrieved_contexts': [retrieved_contexts]
             })
             
-            # 使用Ragas评估（同步函数）
-            result = evaluate(
-                dataset, 
+            # 使用Ragas评估（同步函数）- 在单独的线程中运行以避免阻塞事件循环
+            result = await asyncio.to_thread(
+                evaluate,
+                dataset=dataset,
                 metrics=self.metrics,
                 llm=self.eval_llm,
                 embeddings=self.embeddings,
@@ -152,16 +156,16 @@ class RagasEvaluator(BaseEvaluator):
                         ctx_rec_score = item_scores['context_recall']
                         scores['context_recall'] = float(ctx_rec_score) if ctx_rec_score is not None and not math.isnan(ctx_rec_score) else None
                 
-                print(f"    Ragas原生异步评估完成: {scores}")
+                logger.debug(f"    Ragas原生异步评估完成: {scores}")
                     
             except Exception as e:
-                print(f"    Ragas分数处理错误: {e}")
+                logger.error(f"    Ragas分数处理错误: {e}")
                 scores = {"relevancy": None, "correctness": None, "faithfulness": None, "context_precision": None, "context_recall": None}
             
             return scores
             
         except Exception as e:
-            print(f"❌ {self.name}原生异步评估失败: {e}")
+            logger.error(f"❌ {self.name}原生异步评估失败: {e}")
             return {"relevancy": None, "correctness": None, "faithfulness": None, "context_precision": None, "context_recall": None}
     
     async def evaluate_answers_async(self, questions: List[str], answers: List[str], 
@@ -248,10 +252,10 @@ class RagasEvaluator(BaseEvaluator):
                             context_precision_scores.append(None)
                             context_recall_scores.append(None)
                 
-                print(f"    Ragas原生异步批量评估完成，处理了 {len(relevancy_scores)} 个样本")
+                logger.debug(f"    Ragas原生异步批量评估完成，处理了 {len(relevancy_scores)} 个样本")
                     
             except Exception as e:
-                print(f"    Ragas批量分数处理错误: {e}")
+                logger.error(f"    Ragas批量分数处理错误: {e}")
                 # 返回默认值
                 relevancy_scores = [None] * len(answers)
                 correctness_scores = [None] * len(answers)
@@ -268,7 +272,7 @@ class RagasEvaluator(BaseEvaluator):
             }
             
         except Exception as e:
-            print(f"❌ {self.name}异步批量评估失败: {e}")
+            logger.error(f"❌ {self.name}异步批量评估失败: {e}")
             return {"relevancy": [None] * len(answers), "correctness": [None] * len(answers), "faithfulness": [None] * len(answers), "context_precision": [None] * len(answers), "context_recall": [None] * len(answers)}
     
     def get_supported_metrics(self) -> List[str]:

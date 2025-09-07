@@ -34,10 +34,10 @@ class EvaluatorFactory:
             if evaluator.is_available():
                 return evaluator
             else:
-                print(f"⚠️  {evaluator_type}评估器不可用")
+                logger.warning(f"⚠️  {evaluator_type}评估器不可用")
                 return None
         except Exception as e:
-            print(f"❌ {evaluator_type}评估器创建失败: {e}")
+            logger.error(f"❌ {evaluator_type}评估器创建失败: {e}")
             return None
     
     @classmethod
@@ -112,7 +112,7 @@ class EvaluatorManager:
         self.embedding_config = embedding_config.copy()
         self.evaluators = {}  # 将在初始化时异步创建
         
-        print(f"🔧 评估器管理器初始化完成")
+        logger.info(f"🔧 评估器管理器初始化完成")
     
     async def initialize_async(self):
         """异步初始化所有评估器"""
@@ -133,7 +133,7 @@ class EvaluatorManager:
         if not self.evaluators:
             raise ValueError("没有可用的评估器")
         
-        print(f"🔧 可用的评估器: {list(self.evaluators.keys())}")
+        logger.info(f"🔧 可用的评估器: {list(self.evaluators.keys())}")
     
     async def evaluate_all_async(self, questions: List[str], answers: List[str], 
                                ground_truths: List[str], contexts: List[List[str]] = None) -> Dict[str, Dict[str, List[float]]]:
@@ -141,7 +141,7 @@ class EvaluatorManager:
         all_results = {}
         
         for evaluator_name, evaluator in self.evaluators.items():
-            print(f"\n📊 使用{evaluator_name}评估器评估中...")
+            logger.info(f"\n📊 使用{evaluator_name}评估器评估中...")
             
             try:
                 # 使用带超时的异步评估
@@ -149,9 +149,9 @@ class EvaluatorManager:
                     questions, answers, ground_truths, contexts
                 )
                 all_results[evaluator_name] = metrics
-                print(f"    ✅ 完成")
+                logger.debug(f"    ✅ 完成")
             except Exception as e:
-                print(f"    ❌ 失败: {e}")
+                logger.error(f"    ❌ 失败: {e}")
                 # 使用默认值填充
                 default_metrics = {metric: [None] * len(answers) 
                                  for metric in evaluator.get_supported_metrics()}

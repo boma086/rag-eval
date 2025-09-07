@@ -1,6 +1,6 @@
 # 通用嵌入适配器 - 支持多种嵌入模型提供商的无缝适配
 
-from typing import Dict, List, Any, Optional, Union
+from typing import Dict, List, Any, Optional
 from abc import ABC, abstractmethod
 import asyncio
 import aiohttp
